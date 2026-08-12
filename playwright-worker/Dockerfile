@@ -1,0 +1,29 @@
+FROM mcr.microsoft.com/playwright:v1.62.1-noble AS build
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+
+RUN npm ci
+
+COPY tsconfig.json ./
+COPY src ./src
+
+RUN npm run build
+
+
+FROM mcr.microsoft.com/playwright:v1.62.0-noble
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+COPY package.json package-lock.json ./
+
+RUN npm ci --omit=dev
+
+COPY --from=build /app/dist ./dist
+
+USER pwuser
+
+CMD ["node", "dist/index.js"]

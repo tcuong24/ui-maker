@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: design-api
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/design_db}
+      auto-index-creation: true
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+      retry:
+        enabled: true
+        max-attempts: 3
+        initial-interval: 1s
+        multiplier: 2
+        max-interval: 10s
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1s
+          multiplier: 2
+          max-interval: 10s
+server:
+  port: 9999
+  servlet:
+    context-path: /design-api/api
+jwt:
+  signerKey: ${JWT_SIGNER_KEY:a2f1024f915fb856830ee0c2540006de77e0eb29c477a655b141076f326adc19}
