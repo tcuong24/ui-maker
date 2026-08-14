@@ -25,9 +25,14 @@ class DesignAnalyzer:
                 (
                     "value",
                     "usageCount",
+                    "visualArea",
                     "pageCount",
                     "pageCoverage",
+                    "prominenceScore",
+                    "role",
                     "contexts",
+                    "elements",
+                    "roleCounts",
                 ),
             )
             for item in event.colors[:30]

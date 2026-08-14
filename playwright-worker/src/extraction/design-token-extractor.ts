@@ -209,7 +209,10 @@ export async function extractDesignTokens(
 
     interface ColorAccumulator {
       usageCount: number;
+      visualArea: number;
       contexts: Set<string>;
+      elements: Set<string>;
+      roleCounts: Record<string, number>;
     }
 
     const colorMap = new Map<
@@ -229,38 +232,76 @@ export async function extractDesignTokens(
       }
     >();
 
-    const ignoredColors = new Set([
-      "transparent",
-      "rgba(0, 0, 0, 0)",
-      "rgba(0,0,0,0)"
-    ]);
+    const ignoredColors = new Set(["transparent"]);
+
+    function isTransparentColor(value: string): boolean {
+      if (ignoredColors.has(value)) {
+        return true;
+      }
+
+      const rgba = value.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/);
+      return rgba !== null && Number(rgba[1]) === 0;
+    }
+
+    function extractColors(value: string): string[] {
+      if (!value || value === "none") {
+        return [];
+      }
+
+      return value.match(
+        /#[0-9a-f]{3,8}\b|rgba?\([^)]+\)|hsla?\([^)]+\)/gi
+      ) ?? [];
+    }
+
+    function visibleArea(rect: DOMRect): number {
+      const width = Math.max(
+        0,
+        Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0)
+      );
+      const height = Math.max(
+        0,
+        Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0)
+      );
+      return Math.round(width * height);
+    }
 
     function addColor(
       value: string,
-      context: string
+      role: string,
+      element: string,
+      area = 0
     ): void {
-      const normalized = value.trim().toLowerCase();
+      const normalized = normalizeCssValue(value);
 
       if (
         !normalized ||
-        ignoredColors.has(normalized)
+        isTransparentColor(normalized)
       ) {
         return;
       }
 
       const current = colorMap.get(normalized) ?? {
         usageCount: 0,
-        contexts: new Set<string>()
+        visualArea: 0,
+        contexts: new Set<string>(),
+        elements: new Set<string>(),
+        roleCounts: {}
       };
 
       current.usageCount++;
-      current.contexts.add(context);
+      current.visualArea += Math.max(0, area);
+      current.contexts.add(role);
+      current.roleCounts[role] = (current.roleCounts[role] ?? 0) + 1;
+
+      if (current.elements.size < MAX_CONTEXTS) {
+        current.elements.add(element);
+      }
 
       colorMap.set(normalized, current);
     }
 
     const elements = Array.from(
-      document.querySelectorAll<HTMLElement>("body *")
+      document.querySelectorAll<HTMLElement>("html, body, body *")
     ).slice(0, MAX_ELEMENTS);
 
     for (const element of elements) {
@@ -283,11 +324,59 @@ export async function extractDesignTokens(
       }
 
       const context = describeElement(element);
+      const area = visibleArea(rect);
+      const hasDirectText = Array.from(element.childNodes).some(
+        (node) => node.nodeType === Node.TEXT_NODE && Boolean(node.textContent?.trim())
+      );
+      const isControl = element.matches(
+        "button, a, input[type='button'], input[type='submit'], [role='button']"
+      );
+      const parentBackground = element.parentElement
+        ? getComputedStyle(element.parentElement).backgroundColor
+        : "";
 
-      addColor(style.color, "text");
-      addColor(style.backgroundColor, "background");
-      addColor(style.borderTopColor, "border");
-      addColor(style.outlineColor, "outline");
+      if (hasDirectText) {
+        const textRole = element.matches("h1, h2, h3, h4, h5, h6")
+          ? "heading"
+          : element.matches("a")
+            ? "link"
+            : "text";
+        addColor(style.color, textRole, context);
+      }
+
+      // Avoid counting the same inherited/transparent surface for every child.
+      if (normalizeCssValue(style.backgroundColor) !== normalizeCssValue(parentBackground)) {
+        addColor(
+          style.backgroundColor,
+          isControl ? "control-background" : "background",
+          context,
+          area
+        );
+      }
+
+      if (style.borderTopStyle !== "none" && parseFloat(style.borderTopWidth) > 0) {
+        addColor(style.borderTopColor, "border-top", context);
+      }
+      if (style.borderRightStyle !== "none" && parseFloat(style.borderRightWidth) > 0) {
+        addColor(style.borderRightColor, "border-right", context);
+      }
+      if (style.borderBottomStyle !== "none" && parseFloat(style.borderBottomWidth) > 0) {
+        addColor(style.borderBottomColor, "border-bottom", context);
+      }
+      if (style.borderLeftStyle !== "none" && parseFloat(style.borderLeftWidth) > 0) {
+        addColor(style.borderLeftColor, "border-left", context);
+      }
+      if (style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0) {
+        addColor(style.outlineColor, "outline", context);
+      }
+
+      for (const color of extractColors(style.boxShadow)) {
+        addColor(color, "box-shadow", context);
+      }
+
+      for (const color of extractColors(style.textShadow)) {
+        addColor(color, "text-shadow", context);
+      }
       addSpacing(style.paddingTop, "padding-top", context);
       addSpacing(style.paddingRight, "padding-right", context);
       addSpacing(style.paddingBottom, "padding-bottom", context);
@@ -368,7 +457,10 @@ export async function extractDesignTokens(
       .map(([value, data]) => ({
         value,
         usageCount: data.usageCount,
-        contexts: Array.from(data.contexts)
+        visualArea: data.visualArea,
+        contexts: Array.from(data.contexts),
+        elements: Array.from(data.elements),
+        roleCounts: data.roleCounts
       }))
       .sort(
         (left, right) =>

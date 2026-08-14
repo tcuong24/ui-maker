@@ -1,15 +1,29 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { createRoute } from '../routes/routePaths'
+import { createAnalysis } from '../features/analysis/analysisApi'
 
 export function HomePage() {
   const [url, setUrl] = useState('')
   const navigate = useNavigate()
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
-  function startAnalysis(event: FormEvent<HTMLFormElement>) {
+  async function startAnalysis(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!url.trim()) return
-    navigate(createRoute.analysis('demo-analysis'))
+    setSubmitting(true)
+    setError('')
+    try {
+      const normalizedUrl = /^https?:\/\//i.test(url.trim()) ? url.trim() : `https://${url.trim()}`
+      const created = await createAnalysis(normalizedUrl)
+      localStorage.setItem('current_analysis_id', created.id)
+      navigate(createRoute.demoAnalysis(created.id))
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Không thể bắt đầu phân tích')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -19,8 +33,9 @@ export function HomePage() {
       <p>Nhập URL để thu thập các trang, phân tích màu sắc, typography, spacing, component và tự động sinh báo cáo Markdown.</p>
       <form className="analysis-form" onSubmit={startAnalysis}>
         <input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com" aria-label="Địa chỉ website cần phân tích" />
-        <button type="submit">Bắt đầu phân tích <span>→</span></button>
+        <button type="submit" disabled={submitting}>{submitting ? 'Đang gửi...' : 'Bắt đầu phân tích'} <span>→</span></button>
       </form>
+      {error && <p className="form-error" role="alert">{error}</p>}
       <div className="flow-preview" aria-label="Quy trình phân tích">
         <div><b>01</b><strong>Thu thập</strong><span>Quét các trang website</span></div>
         <i>→</i>

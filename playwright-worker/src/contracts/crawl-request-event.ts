@@ -73,7 +73,10 @@ export interface CrawlFailedEvent {
 export interface ColorUsage {
   value: string;
   usageCount: number;
+  visualArea: number;
   contexts: string[];
+  elements: string[];
+  roleCounts: Record<string, number>;
 }
 
 export interface TypographyUsage {

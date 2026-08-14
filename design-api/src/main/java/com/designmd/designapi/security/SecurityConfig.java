@@ -31,15 +31,14 @@ public class SecurityConfig {
     private final ValidatedTokenRepository validatedTokenRepository;
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
-        httpSecurity.authorizeHttpRequests(request ->request
-                .requestMatchers(HttpMethod.POST,PUBLIC_ENDPOINT).permitAll()
-                .requestMatchers(HttpMethod.GET,"/users").hasRole(Role.ADMIN.name())
-                .anyRequest().authenticated());
-        httpSecurity.oauth2ResourceServer(oauth2 ->oauth2
-                .jwt(jwtConfigurer -> jwtConfigurer.decoder(jwtDecoder())
-                        .jwtAuthenticationConverter(jwtAuthenticationConverter()))
-
-                .authenticationEntryPoint(new JwtAuthenticationEntryPoint()));
+        httpSecurity.authorizeHttpRequests(request -> request
+                .anyRequest().permitAll()
+        );
+//        httpSecurity.oauth2ResourceServer(oauth2 ->oauth2
+//                .jwt(jwtConfigurer -> jwtConfigurer.decoder(jwtDecoder())
+//                        .jwtAuthenticationConverter(jwtAuthenticationConverter()))
+//
+//                .authenticationEntryPoint(new JwtAuthenticationEntryPoint()));
         httpSecurity.csrf(httpSecurityCsrfConfigurer -> httpSecurityCsrfConfigurer.disable());
         return httpSecurity.build();
     }

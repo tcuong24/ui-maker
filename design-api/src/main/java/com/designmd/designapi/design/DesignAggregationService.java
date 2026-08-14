@@ -101,6 +101,53 @@ public class DesignAggregationService {
         }
     };
 
+    private static class ColorEvidenceAccumulator {
+        private long usageCount;
+        private double visualArea;
+        private final Set<String> pageUrls = new LinkedHashSet<>();
+        private final Set<String> contexts = new LinkedHashSet<>();
+        private final Set<String> elements = new LinkedHashSet<>();
+        private final Map<String, Long> roleCounts = new HashMap<>();
+
+        void add(String pageUrl, int count, double area,
+                 List<String> newContexts, List<String> newElements,
+                 Map<String, Integer> newRoleCounts) {
+            usageCount += count;
+            visualArea += Math.max(0, area);
+            pageUrls.add(pageUrl);
+            addLimited(contexts, newContexts, 20);
+            addLimited(elements, newElements, 20);
+
+            if (newRoleCounts != null) {
+                newRoleCounts.forEach((role, roleCount) -> {
+                    if (role != null && !role.isBlank() && roleCount != null) {
+                        roleCounts.merge(role, roleCount.longValue(), Long::sum);
+                    }
+                });
+            }
+        }
+
+        private void addLimited(Set<String> target, List<String> values, int limit) {
+            if (values == null) {
+                return;
+            }
+            for (String value : values) {
+                if (target.size() >= limit) {
+                    break;
+                }
+                if (value != null && !value.isBlank()) {
+                    target.add(value);
+                }
+            }
+        }
+
+        int pageCount() {
+            return pageUrls.size();
+        }
+    }
+
+    private record ColorDraft(String value, ColorEvidenceAccumulator evidence) {}
+
     private List<AggregatedCssVariable> aggregateCssVariables(
             List<CrawledPage> pages,
             int totalPages
@@ -324,7 +371,7 @@ public class DesignAggregationService {
             List<CrawledPage> pages,
             int totalPages
     ) {
-        Map<String, EvidenceAccumulator> accumulatorMap =
+        Map<String, ColorEvidenceAccumulator> accumulatorMap =
                 new HashMap<>();
 
         for (CrawledPage page : pages) {
@@ -341,48 +388,122 @@ public class DesignAggregationService {
                     continue;
                 }
 
-                EvidenceAccumulator accumulator =
+                ColorEvidenceAccumulator accumulator =
                         accumulatorMap.computeIfAbsent(
                                 key,
                                 ignored ->
-                                        new EvidenceAccumulator()
+                                        new ColorEvidenceAccumulator()
                         );
 
                 accumulator.add(
                         page.getPageUrl(),
                         color.usageCount(),
-                        color.contexts()
+                        color.visualArea(),
+                        color.contexts(),
+                        color.elements(),
+                        color.roleCounts()
                 );
             }
         }
 
-        List<AggregatedColor> result =
-                new ArrayList<>();
+        long maxUsage = accumulatorMap.values().stream()
+                .mapToLong(data -> data.usageCount)
+                .max()
+                .orElse(1);
+        double maxArea = accumulatorMap.values().stream()
+                .mapToDouble(data -> data.visualArea)
+                .max()
+                .orElse(1);
 
-        for (var entry : accumulatorMap.entrySet()) {
-            EvidenceAccumulator data =
-                    entry.getValue();
-
-            result.add(
-                    new AggregatedColor(
-                            entry.getKey(),
-                            data.usageCount,
-                            data.pageCount(),
-                            data.coverage(totalPages),
-                            List.copyOf(data.contexts),
-                            List.copyOf(data.pageUrls)
-                    )
-            );
-        }
-
-        return result.stream()
-                .sorted(
-                        Comparator.comparingLong(
-                                AggregatedColor::usageCount
-                        ).reversed()
-                )
+        return accumulatorMap.entrySet().stream()
+                .map(entry -> new ColorDraft(entry.getKey(), entry.getValue()))
+                .map(draft -> toAggregatedColor(
+                        draft,
+                        totalPages,
+                        maxUsage,
+                        maxArea
+                ))
+                .sorted(Comparator.comparingDouble(
+                        AggregatedColor::prominenceScore
+                ).reversed())
                 .limit(100)
                 .toList();
+    }
+
+    private AggregatedColor toAggregatedColor(
+            ColorDraft draft,
+            int totalPages,
+            long maxUsage,
+            double maxArea
+    ) {
+        ColorEvidenceAccumulator data = draft.evidence();
+        double coverage = calculateCoverage(data.pageCount(), totalPages);
+        double frequency = maxUsage == 0 ? 0 : (double) data.usageCount / maxUsage;
+        double area = maxArea == 0 ? 0 : data.visualArea / maxArea;
+        double semantic = semanticWeight(data.roleCounts);
+        double score = round4(
+                coverage * 0.30
+                        + area * 0.30
+                        + frequency * 0.20
+                        + semantic * 0.20
+        );
+
+        return new AggregatedColor(
+                draft.value(),
+                data.usageCount,
+                Math.round(data.visualArea),
+                data.pageCount(),
+                coverage,
+                score,
+                dominantRole(data.roleCounts),
+                List.copyOf(data.contexts),
+                List.copyOf(data.elements),
+                Map.copyOf(data.roleCounts),
+                List.copyOf(data.pageUrls)
+        );
+    }
+
+    private double semanticWeight(Map<String, Long> roleCounts) {
+        if (roleCounts.isEmpty()) {
+            return 0;
+        }
+
+        double weighted = 0;
+        long total = 0;
+        for (var entry : roleCounts.entrySet()) {
+            long count = entry.getValue();
+            weighted += roleWeight(entry.getKey()) * count;
+            total += count;
+        }
+        return total == 0 ? 0 : Math.min(1, weighted / total);
+    }
+
+    private double roleWeight(String role) {
+        if ("background".equals(role)) return 1.0;
+        if ("control-background".equals(role)) return 1.0;
+        if ("heading".equals(role)) return 0.9;
+        if ("link".equals(role)) return 0.9;
+        if ("text".equals(role)) return 0.7;
+        if (role != null && role.startsWith("border-")) return 0.35;
+        if ("outline".equals(role)) return 0.3;
+        if ("box-shadow".equals(role) || "text-shadow".equals(role)) return 0.2;
+        return 0.4;
+    }
+
+    private String dominantRole(Map<String, Long> roleCounts) {
+        String role = roleCounts.entrySet().stream()
+                .max(Map.Entry.comparingByValue())
+                .map(Map.Entry::getKey)
+                .orElse("unknown");
+
+        if (role.startsWith("border-")) return "border";
+        if (role.endsWith("shadow")) return "shadow";
+        if ("control-background".equals(role)) return "accent";
+        return role;
+    }
+
+    private double round4(double value) {
+        return Math.round(value * 10_000) / 10_000.0;
     }
 
     private List<AggregatedTypography> aggregateTypography(

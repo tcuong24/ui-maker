@@ -11,6 +11,7 @@ const router = createBrowserRouter([
     element: <AnalysisLayout />,
     children: [
       { path: ROUTES.home, element: <HomePage /> },
+      { path: ROUTES.demoAnalysis, element: <AnalysisPage /> },
       { path: ROUTES.analysis, element: <AnalysisPage /> },
       { path: ROUTES.markdownReport, element: <MarkdownReportPage /> },
     ],
