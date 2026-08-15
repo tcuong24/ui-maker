@@ -40,7 +40,15 @@ export class CrawlService {
         width: 1440,
         height: 900,
       },
-      userAgent: "DesignCrawler/1.0",
+      locale: "vi-VN",
+      timezoneId: "Asia/Ho_Chi_Minh",
+      userAgent:
+        "Mozilla/5.0 (X11; Linux x86_64) " +
+        "AppleWebKit/537.36 (KHTML, like Gecko) " +
+        "Chrome/141.0.0.0 Safari/537.36",
+      extraHTTPHeaders: {
+        "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+      },
     });
 
     await context.route("**/*", async (route) => {
@@ -218,9 +226,7 @@ export class CrawlService {
 
   private assertWithinDeadline(deadline: number): void {
     if (Date.now() >= deadline) {
-      throw new Error(
-        `Crawl job exceeded ${env.crawlJobTimeoutMs}ms timeout`,
-      );
+      throw new Error(`Crawl job exceeded ${env.crawlJobTimeoutMs}ms timeout`);
     }
   }
 }
