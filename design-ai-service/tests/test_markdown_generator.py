@@ -14,13 +14,13 @@ class MarkdownGeneratorTest(unittest.TestCase):
             "radii": [], "shadows": [], "cssVariables": [],
         }
         markdown = MarkdownGenerator().generate("analysis-1", style, ["Keep the scale compact."], 0.8)
-        self.assertIn("# Agent Design Contract", markdown)
-        self.assertIn('"color-background"', markdown)
-        self.assertIn("--space-1: 8px;", markdown)
+        self.assertIn("# DESIGN.md", markdown)
+        self.assertIn('"canvas": "#ffffff"', markdown)
+        self.assertIn('"space-8": "8px"', markdown)
         json_block = markdown.split("```json\n", 1)[1].split("\n```", 1)[0]
         manifest = json.loads(json_block)
-        self.assertEqual(3, manifest["source"]["pagesAnalyzed"])
-        self.assertEqual("#ffffff", manifest["tokens"]["colors"]["color-background"]["value"])
+        self.assertEqual(3, manifest["pagesAnalyzed"])
+        self.assertEqual("#ffffff", manifest["tokens"]["color"]["canvas"])
 
 
 if __name__ == "__main__":

@@ -29,24 +29,37 @@ export function HomePage() {
 
   return (
     <section className="home-page">
-      <span className="eyebrow">DESIGN INTELLIGENCE</span>
-      <h1>Khám phá Design System của bất kỳ website nào.</h1>
-      <p>Nhập URL để thu thập các trang, phân tích màu sắc, typography, spacing, component và tự động sinh báo cáo Markdown.</p>
-      <form className="analysis-form" onSubmit={startAnalysis}>
-        <input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com" aria-label="Địa chỉ website cần phân tích" />
-        <button type="submit" disabled={submitting}>{submitting ? 'Đang gửi...' : 'Bắt đầu phân tích'} <span>→</span></button>
+      <span className="eyebrow">WEBSITE DESIGN ANALYZER</span>
+      <h1>Phân tích thiết kế website của bạn</h1>
+      <p>Nhập URL để thu thập các trang, phân tích màu sắc, typography, spacing, component và tự động sinh tài liệu Design System tối ưu cho AI agent.</p>
+
+      <form className="analysis-panel" onSubmit={startAnalysis}>
+        <div className="analysis-form">
+          <input
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            placeholder="https://example.com"
+            aria-label="Địa chỉ website cần phân tích"
+            inputMode="url"
+          />
+          <button type="submit" disabled={submitting}>
+            {submitting ? 'Đang gửi...' : 'Bắt đầu phân tích'} <span aria-hidden="true">→</span>
+          </button>
+        </div>
+        <label className="force-refresh-option">
+          <input type="checkbox" checked={forceRefresh} onChange={(event) => setForceRefresh(event.target.checked)} />
+          <span>Bỏ qua cache và phân tích lại website</span>
+        </label>
       </form>
-      <label className="force-refresh-option">
-        <input type="checkbox" checked={forceRefresh} onChange={(event) => setForceRefresh(event.target.checked)} />
-        Bỏ qua cache và phân tích lại website
-      </label>
+
       {error && <p className="form-error" role="alert">{error}</p>}
+
       <div className="flow-preview" aria-label="Quy trình phân tích">
         <div><b>01</b><strong>Thu thập</strong><span>Quét các trang website</span></div>
-        <i>→</i>
+        <i aria-hidden="true" />
         <div><b>02</b><strong>Phân tích</strong><span>Trích xuất design tokens</span></div>
-        <i>→</i>
-        <div><b>03</b><strong>Tạo tài liệu</strong><span>Xuất báo cáo Markdown</span></div>
+        <i aria-hidden="true" />
+        <div><b>03</b><strong>Tạo tài liệu</strong><span>Xuất tài liệu cho AI agent</span></div>
       </div>
     </section>
   )

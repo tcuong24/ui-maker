@@ -3,183 +3,230 @@ import re
 from typing import Any
 
 
-ROLE_PRIORITY = ("background", "text", "heading", "accent", "link", "border", "outline", "shadow", "unknown")
-
-
 def _number(value: Any, fallback: float = 0) -> float:
-    return float(value) if isinstance(value, (int, float)) else fallback
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return fallback
+    return fallback
 
 
-def _slug(value: Any, fallback: str) -> str:
-    normalized = re.sub(r"[^a-z0-9]+", "-", str(value or "").lower())
-    return normalized.strip("-") or fallback
+def _px(value: Any) -> float:
+    match = re.fullmatch(r"\s*(-?\d+(?:\.\d+)?)px\s*", str(value or ""))
+    return float(match.group(1)) if match else 0
 
 
-def _unique_name(base: str, used: set[str]) -> str:
-    candidate = base
-    suffix = 2
-    while candidate in used:
-        candidate = f"{base}-{suffix}"
-        suffix += 1
-    used.add(candidate)
-    return candidate
+def _rgba(value: Any) -> tuple[int, int, int, float] | None:
+    match = re.fullmatch(
+        r"rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)",
+        str(value or ""),
+    )
+    if match:
+        return (
+            int(match.group(1)),
+            int(match.group(2)),
+            int(match.group(3)),
+            float(match.group(4) or 1),
+        )
+
+    hex_match = re.fullmatch(r"#([0-9a-fA-F]{6})", str(value or ""))
+    if hex_match:
+        raw = hex_match.group(1)
+        return int(raw[0:2], 16), int(raw[2:4], 16), int(raw[4:6], 16), 1
+    return None
+
+
+def _is_primary_candidate(item: dict[str, Any]) -> bool:
+    parsed = _rgba(item.get("value"))
+    if not parsed:
+        return item.get("role") in {"accent", "link"}
+    red, green, blue, alpha = parsed
+    chroma = max(red, green, blue) - min(red, green, blue)
+    return alpha >= 0.8 and chroma >= 45
 
 
 class MarkdownGenerator:
-    """Build a compact design contract from already aggregated design data."""
+    """Generate a concise semantic DESIGN.md from aggregated evidence."""
 
-    def generate(self, analysis_job_id: str, style: dict[str, Any], recommendations: list[str], confidence: float) -> str:
-        manifest = self._build_manifest(analysis_job_id, style, recommendations, confidence)
-        css = self._build_css(manifest["tokens"])
+    def generate(
+            self,
+            analysis_job_id: str,
+            style: dict[str, Any],
+            recommendations: list[str],
+            confidence: float,
+    ) -> str:
+        tokens = self._tokens(style)
+        metadata = style.get("metadata", {})
+        page_count = metadata.get("pageCount", 0)
+        effective_confidence = min(confidence, 0.65) if page_count < 2 else confidence
+
+        contract = {
+            "schemaVersion": 2,
+            "kind": "ui-maker.design-contract",
+            "analysisId": analysis_job_id,
+            "confidence": round(effective_confidence, 2),
+            "pagesAnalyzed": page_count,
+            "tokens": tokens,
+        }
+
         lines = [
             "---",
-            "document: ui-maker-agent-design-contract",
-            "schemaVersion: 1",
+            "document: ui-maker-design-contract",
+            "schemaVersion: 2",
             f"analysisId: {analysis_job_id}",
-            f"pagesAnalyzed: {manifest['source']['pagesAnalyzed']}",
-            f"confidence: {confidence:.2f}",
+            f"pagesAnalyzed: {page_count}",
+            f"confidence: {effective_confidence:.2f}",
             "---",
             "",
-            "# Agent Design Contract",
+            "# DESIGN.md",
             "",
-            "> Canonical, aggregated design data for implementation agents. Prefer these tokens over inventing new visual values.",
+            "A compact design contract generated from aggregated computed styles.",
             "",
-            "## Agent instructions",
+            "## Agent rules",
             "",
-            "1. Reuse a token when its semantic role matches the requested UI.",
-            "2. Treat `value` as canonical and `evidence` as supporting context, not CSS to copy blindly.",
-            "3. Preserve the spacing, radius, typography, and shadow scales before introducing a new value.",
-            "4. When evidence conflicts, prefer higher `pageCoverage`, then higher `usageCount`.",
-            "5. Do not infer missing behavior, accessibility states, or breakpoints from this file.",
+            "- Use the semantic tokens below before introducing new visual values.",
+            "- Preserve token roles; do not choose values only because they look similar.",
+            "- Treat missing component states, breakpoints, and accessibility behavior as unspecified.",
+            "- Validate color contrast and responsive behavior in the implementation.",
             "",
-            "## Machine-readable manifest",
+            "## Canonical tokens",
             "",
             "```json",
-            json.dumps(manifest, ensure_ascii=False, indent=2),
+            json.dumps(contract, ensure_ascii=False, indent=2),
             "```",
             "",
-            "## CSS token starter",
+            "## Implementation guidance",
             "",
-            "```css",
-            css,
-            "```",
-            "",
-            "## Implementation notes",
-            "",
+            f"- Base font: `{tokens['font'].get('sans', 'system-ui, sans-serif')}`.",
+            "- Use spacing, radius, and shadow values as closed scales.",
+            "- `color.primary` is the strongest opaque chromatic candidate; verify its intended action role.",
+            "- Values from third-party widgets, ads, and low-frequency computed styles are excluded.",
         ]
-        lines.extend(f"- {item}" for item in recommendations)
-        if not recommendations:
-            lines.append("- No major inconsistency was detected in the aggregated token scales.")
-        lines.extend([
-            "",
-            "## Scope and limitations",
-            "",
-            "- Values are ranked from cross-page aggregated evidence, not from a single DOM sample.",
-            "- Low-signal values are intentionally limited to keep agent context compact.",
-            "- Validate contrast, interaction states, and responsive behavior during implementation.",
-            "",
-        ])
+
+        if recommendations:
+            lines.extend(["", "## Review notes", ""])
+            lines.extend(f"- {recommendation}" for recommendation in recommendations)
+
+        if page_count < 2:
+            lines.extend([
+                "",
+                "## Confidence note",
+                "",
+                "Only one page was analyzed. Cross-page consistency, responsive variants, and secondary layouts are not confirmed.",
+            ])
+
+        lines.append("")
         return "\n".join(lines)
 
-    def _build_manifest(self, analysis_job_id: str, style: dict[str, Any], recommendations: list[str], confidence: float) -> dict[str, Any]:
+    def _tokens(self, style: dict[str, Any]) -> dict[str, Any]:
+        typography = self._typography(style.get("typography", []))
         return {
-            "schemaVersion": 1,
-            "kind": "ui-maker.agent-design-contract",
-            "analysisId": analysis_job_id,
-            "confidence": round(confidence, 2),
-            "source": {
-                "pagesAnalyzed": style.get("metadata", {}).get("pageCount", 0),
-                "aggregation": "cross-page-ranked",
-            },
-            "usagePolicy": {
-                "tokenPreference": "semantic-role-first",
-                "conflictResolution": ["pageCoverage", "usageCount"],
-                "allowNewValues": "only-when-no-semantic-match",
-            },
-            "tokens": {
-                "colors": self._color_tokens(style.get("colors", [])),
-                "typography": self._typography_tokens(style.get("typography", [])),
-                "spacing": self._scale_tokens("space", style.get("spacing", []), 12),
-                "radii": self._scale_tokens("radius", style.get("radii", []), 8),
-                "shadows": self._shadow_tokens(style.get("shadows", [])),
-                "cssVariables": self._css_variables(style.get("cssVariables", [])),
-            },
-            "recommendations": recommendations,
+            "color": self._colors(style.get("colors", [])),
+            "font": {"sans": typography.pop("fontFamily", "system-ui, sans-serif")},
+            "typography": typography,
+            "spacing": self._spacing(style.get("spacing", [])),
+            "radius": self._radii(style.get("radii", [])),
+            "shadow": self._shadows(style.get("shadows", [])),
         }
 
-    def _color_tokens(self, colors: list[dict[str, Any]]) -> dict[str, Any]:
-        ranked = sorted(colors, key=lambda item: (_number(item.get("prominenceScore")), _number(item.get("pageCoverage")), _number(item.get("usageCount"))), reverse=True)[:16]
-        role_order = {role: index for index, role in enumerate(ROLE_PRIORITY)}
-        ranked.sort(key=lambda item: role_order.get(item.get("role", "unknown"), 99))
-        used: set[str] = set()
-        result: dict[str, Any] = {}
-        for item in ranked:
-            role = _slug(item.get("role"), "unknown")
-            name = _unique_name(f"color-{role}", used)
-            result[name] = self._evidence(item, ("prominenceScore", "contexts", "elements"))
-        return result
-
-    def _typography_tokens(self, items: list[dict[str, Any]]) -> dict[str, Any]:
-        ranked = sorted(items, key=lambda item: _number(item.get("usageCount")), reverse=True)[:10]
-        return {
-            f"type-{index}": {
-                "fontFamily": item.get("fontFamily"),
-                "fontSize": item.get("fontSize"),
-                "fontWeight": item.get("fontWeight"),
-                "lineHeight": item.get("lineHeight"),
-                "letterSpacing": item.get("letterSpacing"),
-                "evidence": self._evidence_counts(item),
-            }
-            for index, item in enumerate(ranked, start=1)
-        }
-
-    def _scale_tokens(self, prefix: str, items: list[dict[str, Any]], limit: int) -> dict[str, Any]:
+    def _colors(self, items: list[dict[str, Any]]) -> dict[str, str]:
+        eligible = [item for item in items if item.get("value") and _number(item.get("usageCount")) >= 2]
         ranked = sorted(
-            (item for item in items if item.get("value")),
-            key=lambda item: (_number(item.get("pixels")), -_number(item.get("usageCount"))),
-        )[:limit]
-        return {
-            f"{prefix}-{index}": self._evidence(item, ("pixels", "properties", "contexts", "corners"))
-            for index, item in enumerate(ranked, start=1)
-        }
+            eligible,
+            key=lambda item: (
+                _number(item.get("prominenceScore")),
+                _number(item.get("pageCoverage")),
+                _number(item.get("usageCount")),
+            ),
+            reverse=True,
+        )
+        result: dict[str, str] = {}
+        used: set[str] = set()
 
-    def _shadow_tokens(self, items: list[dict[str, Any]]) -> dict[str, Any]:
-        ranked = sorted(items, key=lambda item: _number(item.get("usageCount")), reverse=True)[:6]
-        return {
-            f"shadow-{index}": self._evidence(item, ("contexts",))
-            for index, item in enumerate(ranked, start=1) if item.get("value")
-        }
+        def add(name: str, candidates: list[dict[str, Any]]) -> None:
+            for candidate in candidates:
+                value = str(candidate["value"])
+                if value not in used:
+                    result[name] = value
+                    used.add(value)
+                    return
 
-    def _css_variables(self, items: list[dict[str, Any]]) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        for item in items[:40]:
-            variants = item.get("variants") or []
-            if not item.get("name") or not variants:
-                continue
-            best = max(variants, key=lambda variant: (_number(variant.get("pageCoverage")), _number(variant.get("pageCount"))))
-            result[item["name"]] = {
-                "value": best.get("value"),
-                "evidence": {"pageCount": best.get("pageCount", 0), "pageCoverage": best.get("pageCoverage", 0)},
-            }
+        backgrounds = [item for item in ranked if item.get("role") == "background"]
+        texts = [item for item in ranked if item.get("role") in {"text", "heading"}]
+        borders = [item for item in ranked if item.get("role") == "border"]
+        links = [item for item in ranked if item.get("role") == "link"]
+        primary = [item for item in ranked if _is_primary_candidate(item)]
+
+        add("canvas", backgrounds)
+        add("surface", backgrounds)
+        add("text", texts)
+        add("textMuted", texts)
+        add("primary", primary)
+        add("link", links)
+        add("border", borders)
         return result
 
-    def _evidence(self, item: dict[str, Any], include: tuple[str, ...]) -> dict[str, Any]:
-        output = {"value": item.get("value"), "evidence": self._evidence_counts(item)}
-        for field in include:
-            value = item.get(field)
-            if value not in (None, [], {}):
-                output["evidence"][field] = value
-        return output
+    def _typography(self, items: list[dict[str, Any]]) -> dict[str, Any]:
+        eligible = [item for item in items if item.get("fontFamily") and _number(item.get("usageCount")) >= 2]
+        if not eligible:
+            return {}
+        ranked = sorted(eligible, key=lambda item: _number(item.get("usageCount")), reverse=True)
+        body = ranked[0]
+        body_size = _px(body.get("fontSize"))
 
-    def _evidence_counts(self, item: dict[str, Any]) -> dict[str, Any]:
-        return {"usageCount": item.get("usageCount", 0), "pageCount": item.get("pageCount", 0), "pageCoverage": item.get("pageCoverage", 0)}
+        headings = [item for item in eligible if _px(item.get("fontSize")) > body_size or _number(item.get("fontWeight")) >= 600]
+        labels = [item for item in ranked if _px(item.get("fontSize")) <= body_size and _number(item.get("fontWeight")) >= 500]
+        captions = sorted(eligible, key=lambda item: (_px(item.get("fontSize")), -_number(item.get("usageCount"))))
 
-    def _build_css(self, tokens: dict[str, Any]) -> str:
-        declarations: list[str] = []
-        for group in ("colors", "spacing", "radii", "shadows"):
-            for name, token in tokens[group].items():
-                declarations.append(f"  --{name}: {token['value']};")
-        for name, token in tokens["cssVariables"].items():
-            css_name = name if str(name).startswith("--") else f"--{name}"
-            declarations.append(f"  {css_name}: {token['value']};")
-        return ":root {\n" + "\n".join(declarations) + "\n}"
+        result: dict[str, Any] = {"fontFamily": body["fontFamily"], "body": self._type_style(body)}
+        if headings:
+            result["heading"] = self._type_style(max(headings, key=lambda item: (_px(item.get("fontSize")), _number(item.get("fontWeight")))))
+        if labels:
+            result["label"] = self._type_style(labels[0])
+        if captions and _px(captions[0].get("fontSize")) < body_size:
+            result["caption"] = self._type_style(captions[0])
+        return result
+
+    def _type_style(self, item: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "fontSize": item.get("fontSize"),
+            "fontWeight": item.get("fontWeight"),
+            "lineHeight": item.get("lineHeight"),
+            "letterSpacing": item.get("letterSpacing"),
+        }
+
+    def _spacing(self, items: list[dict[str, Any]]) -> dict[str, str]:
+        by_pixels: dict[int, dict[str, Any]] = {}
+        for item in items:
+            pixels = _number(item.get("pixels"))
+            rounded = round(pixels)
+            if rounded < 2 or rounded > 96 or abs(pixels - rounded) > 0.2:
+                continue
+            existing = by_pixels.get(rounded)
+            if not existing or _number(item.get("usageCount")) > _number(existing.get("usageCount")):
+                by_pixels[rounded] = item
+
+        strongest = sorted(by_pixels.items(), key=lambda pair: _number(pair[1].get("usageCount")), reverse=True)[:8]
+        return {f"space-{pixels}": f"{pixels}px" for pixels, _ in sorted(strongest)}
+
+    def _radii(self, items: list[dict[str, Any]]) -> dict[str, str]:
+        result: dict[str, str] = {}
+        numeric = [item for item in items if isinstance(item.get("pixels"), (int, float)) and _number(item.get("usageCount")) >= 3]
+        strongest = sorted(numeric, key=lambda item: _number(item.get("usageCount")), reverse=True)[:5]
+        for item in sorted(strongest, key=lambda item: _number(item.get("pixels"))):
+            pixels = round(_number(item.get("pixels")))
+            result[f"radius-{pixels}"] = f"{pixels}px"
+        if any(item.get("value") == "50%" and _number(item.get("usageCount")) >= 2 for item in items):
+            result["round"] = "50%"
+        return result
+
+    def _shadows(self, items: list[dict[str, Any]]) -> dict[str, str]:
+        ranked = sorted(
+            (item for item in items if item.get("value") and _number(item.get("usageCount")) >= 2),
+            key=lambda item: _number(item.get("usageCount")),
+            reverse=True,
+        )[:2]
+        return {f"shadow-{index}": str(item["value"]) for index, item in enumerate(ranked, start=1)}

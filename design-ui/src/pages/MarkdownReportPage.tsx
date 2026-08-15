@@ -9,6 +9,7 @@ export function MarkdownReportPage() {
   const [markdown, setMarkdown] = useState('Đang tải Agent Design Contract từ Design API...')
   const [error, setError] = useState('')
   const [regenerating, setRegenerating] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     if (!analysisId) return
@@ -39,8 +40,18 @@ export function MarkdownReportPage() {
     }
   }
 
+  async function copyReport() {
+    try {
+      await navigator.clipboard.writeText(markdown)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setError('Trình duyệt không cho phép sao chép vào clipboard')
+    }
+  }
+
   return <section className="report-page">
-    <div className="page-heading"><div><span className="eyebrow">AGENT-READY MARKDOWN</span><h1>Agent Design Contract</h1><p>Dữ liệu thiết kế đã được tổng hợp, xếp hạng và chuẩn hóa để coding agent sử dụng.</p></div><div><button className="primary-button" onClick={regenerate} disabled={regenerating}>{regenerating ? 'Đang tạo lại...' : '↻ Tạo lại từ dữ liệu đã lưu'}</button> <button className="primary-button" onClick={downloadReport} disabled={Boolean(error)}>↓ Tải file .md</button></div></div>
+    <div className="page-heading"><div><span className="eyebrow">AGENT-READY MARKDOWN</span><h1>Agent Design Contract</h1><p>Dữ liệu thiết kế đã được tổng hợp, xếp hạng và chuẩn hóa để coding agent sử dụng.</p></div><div><button className="primary-button" onClick={copyReport} disabled={Boolean(error)}>{copied ? '✓ Đã sao chép' : '⧉ Sao chép'}</button> <button className="primary-button" onClick={regenerate} disabled={regenerating}>{regenerating ? 'Đang tạo lại...' : '↻ Tạo lại'}</button> <button className="primary-button" onClick={downloadReport} disabled={Boolean(error)}>↓ Tải file .md</button></div></div>
     {error && <div className="api-error" role="alert"><strong>Không thể tải báo cáo</strong><span>{error}</span></div>}
     <div className="report-editor"><div className="editor-bar"><span>ui-maker-agent-contract.md</span><Link to={createRoute.analysis(analysisId)}>← Quay lại kết quả</Link></div><pre>{error || markdown}</pre></div>
   </section>
