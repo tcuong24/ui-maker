@@ -65,6 +65,7 @@ class DesignAnalyzer:
                     "pageCount",
                     "pageCoverage",
                     "properties",
+                    "contexts",
                 ),
             )
             for item in event.spacing
@@ -84,6 +85,7 @@ class DesignAnalyzer:
                     "pageCount",
                     "pageCoverage",
                     "corners",
+                    "contexts",
                 ),
             )
             for item in event.radii[:10]
@@ -97,6 +99,7 @@ class DesignAnalyzer:
                     "usageCount",
                     "pageCount",
                     "pageCoverage",
+                    "contexts",
                 ),
             )
             for item in event.shadows[:10]
