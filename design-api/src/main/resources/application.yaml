@@ -35,3 +35,6 @@ server:
     context-path: /design-api/api
 jwt:
   signerKey: ${JWT_SIGNER_KEY:a2f1024f915fb856830ee0c2540006de77e0eb29c477a655b141076f326adc19}
+analysis:
+  cache:
+    ttl: ${ANALYSIS_CACHE_TTL:PT168H}

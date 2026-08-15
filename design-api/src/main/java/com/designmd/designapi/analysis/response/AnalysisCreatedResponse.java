@@ -5,5 +5,7 @@ import com.designmd.designapi.analysis.AnalysisStatus;
 public record AnalysisCreatedResponse (String id,
                                        String websiteUrl,
                                        AnalysisStatus status,
-                                       int progress) {
+                                       int progress,
+                                       boolean cacheHit,
+                                       String sourceAnalysisId) {
 }

@@ -4,6 +4,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
+import java.time.Instant;
 import java.util.Optional;
 
 public interface AnalysisJobRepository extends MongoRepository<AnalysisJob,String> {
@@ -25,5 +26,12 @@ public interface AnalysisJobRepository extends MongoRepository<AnalysisJob,Strin
     void deleteByIdAndUserId(
             String id,
             String userId
+    );
+
+    Optional<AnalysisJob> findFirstByUserIdAndCacheKeyAndStatusAndCompletedAtAfterOrderByCompletedAtDesc(
+            String userId,
+            String cacheKey,
+            AnalysisStatus status,
+            Instant completedAfter
     );
 }

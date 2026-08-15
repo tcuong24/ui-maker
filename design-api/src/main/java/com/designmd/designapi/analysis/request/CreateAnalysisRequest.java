@@ -20,6 +20,8 @@ public record CreateAnalysisRequest(@NotBlank(message = "Website URL is required
                                             @Size(max = 2048, message = "Additional path is too long")
                                             String> additionalPaths,
 
-                                    boolean includeScreenshot) {
+                                    boolean includeScreenshot,
+
+                                    boolean forceRefresh) {
 
 }

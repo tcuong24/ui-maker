@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,12 +24,24 @@ public class AnalysisController {
     private final AnalysisQueryService queryService;
 
     @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<AnalysisCreatedResponse> create(
+    public ResponseEntity<ApiResponse<AnalysisCreatedResponse>> create(
             @Valid @RequestBody CreateAnalysisRequest request
     ) {
+        AnalysisCreatedResponse result = commandService.create(request);
+        HttpStatus status = result.cacheHit() ? HttpStatus.OK : HttpStatus.CREATED;
+        return ResponseEntity.status(status)
+                .body(ApiResponse.<AnalysisCreatedResponse>builder()
+                        .result(result)
+                        .build());
+    }
+
+    @PostMapping("/{analysisId}/artifact/regenerate")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public ApiResponse<AnalysisCreatedResponse> regenerateArtifact(
+            @PathVariable String analysisId
+    ) {
         return ApiResponse.<AnalysisCreatedResponse>builder()
-                .result(commandService.create(request))
+                .result(commandService.regenerateArtifact(analysisId))
                 .build();
     }
 

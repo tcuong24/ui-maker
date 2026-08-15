@@ -26,6 +26,15 @@ public class AnalysisJob {
 
     private String websiteUrl;
 
+    @Indexed
+    private String normalizedUrl;
+
+    @Indexed
+    private String domain;
+
+    @Indexed
+    private String cacheKey;
+
     private List<String> additionalPaths;
 
     private boolean includeScreenshot;
@@ -43,6 +52,10 @@ public class AnalysisJob {
     private Instant updatedAt;
 
     private Instant completedAt;
+
+    private boolean cacheHit;
+
+    private String sourceAnalysisId;
     @Version
     Long version;
 }

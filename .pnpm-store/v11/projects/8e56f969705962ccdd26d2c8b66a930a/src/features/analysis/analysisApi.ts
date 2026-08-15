@@ -22,6 +22,8 @@ export interface AnalysisCreated {
   id: string
   status: AnalysisStatus
   progress: number
+  cacheHit: boolean
+  sourceAnalysisId: string | null
 }
 
 export interface DesignSystem {
@@ -46,10 +48,16 @@ export interface DesignSystem {
   cssVariables: Array<{ name: string; variants: Array<{ value: string; pageCount: number; pageCoverage: number; pageUrls: string[] }> }>
 }
 
-export function createAnalysis(websiteUrl: string) {
+export function createAnalysis(websiteUrl: string, forceRefresh = false) {
   return apiRequest<AnalysisCreated>('/analyses', {
     method: 'POST',
-    body: JSON.stringify({ websiteUrl, additionalPaths: [], includeScreenshot: true }),
+    body: JSON.stringify({ websiteUrl, additionalPaths: [], includeScreenshot: true, forceRefresh }),
+  })
+}
+
+export function regenerateArtifact(id: string) {
+  return apiRequest<AnalysisCreated>(`/analyses/${id}/artifact/regenerate`, {
+    method: 'POST',
   })
 }
 

@@ -11,5 +11,7 @@ public interface DesignAnalysisResultRepository
             String analysisJobId
     );
 
+    boolean existsByAnalysisJobId(String analysisJobId);
+
     void deleteByAnalysisJobId(String analysisJobId);
 }

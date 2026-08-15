@@ -17,6 +17,16 @@
   }
 }
 
+.force-refresh-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  color: #7e798c;
+  font-size: 12px;
+  cursor: pointer;
+}
+
 .hero {
   position: relative;
 
