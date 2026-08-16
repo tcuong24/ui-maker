@@ -9,6 +9,7 @@ public enum ErrorCode {
     UNCATEGORIZED_EXCEPTION(1111, "Uncategorized error", HttpStatus.INTERNAL_SERVER_ERROR),
 
     INVALID_MESSAGE(1002, "Invalid message key", HttpStatus.BAD_REQUEST),
+    INVALID_INPUT(1005, "Invalid request input", HttpStatus.BAD_REQUEST),
     USER_EXISTED(1001, "User existed", HttpStatus.BAD_REQUEST),
     USER_NOT_EXISTED(1001, "User existed", HttpStatus.NOT_FOUND),
     USERNAME_INVALID(1003, "User must be at least {min} character", HttpStatus.BAD_REQUEST),
