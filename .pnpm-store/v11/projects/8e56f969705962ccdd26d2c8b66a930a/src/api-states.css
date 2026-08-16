@@ -1,6 +1,0 @@
-.analysis-form button:disabled { opacity: .65; cursor: wait; }
-.form-error { max-width: 750px !important; margin: 12px auto !important; color: #b73c4b !important; font-size: 12px !important; }
-.api-error { display: flex; flex-direction: column; gap: 5px; margin-bottom: 18px; padding: 14px 17px; color: #9f3140; background: #fff0f1; border: 1px solid #f4cbd0; border-radius: 10px; font-size: 12px; }
-.result-note { color: #8d8899; font-size: 12px; }
-.status-completed { color: #167d5a; background: #e6f8f0; }
-.status-failed, .status-cancelled { color: #a83140; background: #fff0f1; }
