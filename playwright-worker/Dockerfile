@@ -12,7 +12,7 @@ COPY src ./src
 RUN npm run build
 
 
-FROM mcr.microsoft.com/playwright:v1.62.0-noble
+FROM mcr.microsoft.com/playwright:v1.62.1-noble
 
 WORKDIR /app
 
